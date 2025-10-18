@@ -18,7 +18,11 @@ class HttpProvider(private val url: String) {
 
         val url = url + endpoint
 
-        Log.d("GPS", "Posting GPS Event")
+        if (endpoint == "/api/event") {
+            Log.d("GPS", "Posting GPS Event")
+        } else {
+            Log.d("HTTP", "Posting to $url")
+        }
 
         return withContext(Dispatchers.IO) {
             val request = Request.Builder().url(url).post(body).build()
@@ -37,6 +41,36 @@ class HttpProvider(private val url: String) {
         } catch (e: Exception) {
             Log.d("GPS", "Error in POST: ${e.message}")
             e.printStackTrace()
+        }
+    }
+
+    suspend fun getNeonStatus(): String {
+        Log.d("HTTP", "Getting status from $url")
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder().url(url + "/api/status").build()
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) throw IOException("Unexpected code $response")
+                    response.body?.string() ?: ""
+                }
+            } catch (e: Exception) {
+                Log.d("HTTP", "Error in GET: ${e.message}")
+                e.printStackTrace()
+                "Error: ${e.message}" 
+            }
+        }
+    }
+
+    suspend fun startNeonRecording(): String {
+        Log.d("HTTP", "Starting Neon recording")
+
+        return try {
+            postData("/api/recording:start", "{}")
+        } catch (e: Exception) {
+            Log.d("HTTP", "Error in POST: ${e.message}")
+            e.printStackTrace()
+            "Error: ${e.message}"
         }
     }
 }

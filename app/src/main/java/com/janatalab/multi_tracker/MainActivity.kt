@@ -455,6 +455,7 @@ fun vibrate(context: Context, durationMillis: Long = 200) {
 fun GPSRecorderScreen(viewModel: GpsViewModel) {
     val context = LocalContext.current
     val gpsRecordingUiState by viewModel.uiState.collectAsState()
+    val neonRecordingUiState by viewModel.neonUiState.collectAsState()
 
     if (gpsRecordingUiState.isRecording && gpsRecordingUiState.numSamples == 1) {
         vibrate(context)
@@ -470,12 +471,31 @@ fun GPSRecorderScreen(viewModel: GpsViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "GPS Recorder",
+            text = "Multi Tracker",
             color = MaterialTheme.colorScheme.onBackground,
             style = MaterialTheme.typography.headlineMedium
         )
 
-        Spacer(modifier = Modifier.height(210.dp))
+        // Neon button and status
+        Spacer(modifier = Modifier.height(30.dp))
+
+        // Text(
+        //     text = "Neon Status",
+        //     color = MaterialTheme.colorScheme.onBackground,
+        //     style = MaterialTheme.typography.headlineMedium
+        // )
+        Spacer(modifier = Modifier.height(10.dp))
+        NeonEventButton(viewModel)
+        Text(
+            text = neonRecordingUiState.statusMessage,
+            // Make the font smaller to fit longer status messages
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().height(160.dp)
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         GpsEventButton(viewModel)
 

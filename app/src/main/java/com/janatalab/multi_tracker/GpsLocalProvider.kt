@@ -104,7 +104,7 @@ class GpsLocalProvider() : GpsApi, Service() {
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Running GPS Service in background")
             .setContentText("GPS data is being saved")
-            .setSmallIcon(R.drawable.gps_alpha_lab)
+            // .setSmallIcon(R.drawable.multi_tracker)
             .setOngoing(true)
             .build()
 

@@ -16,13 +16,25 @@ import kotlinx.coroutines.withContext
 class GpsViewModel(
     private val repository: GpsRepository,
     private val geoCodingProvider: GeoCodingProvider,
-    private val httpProvider: HttpProvider
+    private val httpProvider: HttpProvider,
+    // Going to add a Movella Provider here later
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(GpsRecordingUiState())
     val uiState: StateFlow<GpsRecordingUiState> = _uiState.asStateFlow()
 
+    private val _neonUiState = MutableStateFlow(NeonRecordingUiState())
+    val neonUiState: StateFlow<NeonRecordingUiState> = _neonUiState.asStateFlow()
+
     fun setUserFolder(userFolder: Uri?) {
         repository.setUserFolder(userFolder)
+    }
+
+    suspend fun checkNeonStatus() {
+        val status_message = httpProvider.getNeonStatus()
+
+        _neonUiState.update { it.copy(
+            statusMessage = status_message
+        ) }
     }
 
     fun startStopGpsRecording() {

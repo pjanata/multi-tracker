@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "gps_alpha_lab"
+rootProject.name = "multi_tracker"
 include(":app")
