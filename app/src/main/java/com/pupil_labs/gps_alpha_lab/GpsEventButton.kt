@@ -1,4 +1,4 @@
-package com.pupil_labs.gps_alpha_lab
+package com.janatalab.multi_tracker
 
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding

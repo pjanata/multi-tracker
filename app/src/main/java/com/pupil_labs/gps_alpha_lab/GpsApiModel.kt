@@ -1,4 +1,4 @@
-package com.pupil_labs.gps_alpha_lab
+package com.janatalab.multi_tracker
 
 data class GpsApiModel(
     val timestamp: Long,

@@ -1,4 +1,4 @@
-package com.pupil_labs.gps_alpha_lab
+package com.janatalab.multi_tracker
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,6 +19,6 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.pupil_labs.gps_alpha_lab", appContext.packageName)
+        assertEquals("com.janatalab.multi_tracker", appContext.packageName)
     }
 }

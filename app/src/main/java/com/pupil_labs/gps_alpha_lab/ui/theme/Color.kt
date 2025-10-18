@@ -1,4 +1,4 @@
-package com.pupil_labs.gps_alpha_lab.ui.theme
+package com.janatalab.multi_tracker.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

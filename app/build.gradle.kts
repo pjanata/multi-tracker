@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.pupil_labs.gps_alpha_lab"
+    namespace = "com.janatalab.multi_tracker"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.pupil_labs.gps_alpha_lab"
+        applicationId = "com.janatalab.multi_tracker"
         minSdk = 30
         targetSdk = 35
         versionCode = 1
