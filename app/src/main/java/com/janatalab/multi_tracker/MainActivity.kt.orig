@@ -68,30 +68,24 @@ class MainActivity : ComponentActivity() {
         val geoCodingProvider = GeoCodingProvider(geocoder)
 
         // neon's real-time api can be accessed via localhost when running on same phone
-        val neonProvider = NeonProvider("http://localhost:8080/api")
+        val httpProvider = HttpProvider("http://localhost:8080")
 
         val gpsLocalProvider = GpsLocalProvider()
         val gpsLocalDataSource = GpsDataSource(gpsLocalProvider)
         val gpsRepository = GpsRepository(this, gpsLocalDataSource)
 
-        // val movellaDOTProvider = MovellaDOTProvider()
-
-        val multiViewModel = MultiViewModel(
+        val gpsViewModel = GpsViewModel(
             gpsRepository,
             geoCodingProvider,
-            neonProvider,
-            // movellaDOTProvider
+            httpProvider
         )
+        gpsViewModel.listenGpsNumSamples()
 
-        // TODO: modify this so that listenGPsNumSamples is defined in the gpsRepository
-        // rather than the ViewModel
-        multiViewModel.listenGpsNumSamples()
-
-        Log.d("MultiTrack", "Initialized all Providers and ViewModel")
+        Log.d("GPS", "Initialized all Providers and ViewModel")
 
         setContent {
             BlackWhiteTheme() {
-                SetupAndStartMainScreen(multiViewModel)
+                SetupAndStartMainScren(gpsViewModel)
             }
         }
     }
@@ -128,18 +122,18 @@ fun areNotificationsEnabled(context: Context): Boolean {
 }
 
 @Composable
-fun SetupAndStartMainScreen(multiViewModel: MultiViewModel) {
+fun SetupAndStartMainScren(gpsViewModel: GpsViewModel) {
     val context = LocalContext.current
-    val sharedPrefs = context.getSharedPreferences("multi_tracker_prefs", Context.MODE_PRIVATE)
-    val savedUriString = sharedPrefs.getString("multi_tracker_folder_uri", null)
-    Log.d("MultiTrack", "Saved data dir: ${savedUriString}")
+    val sharedPrefs = context.getSharedPreferences("gps_prefs", Context.MODE_PRIVATE)
+    val savedUriString = sharedPrefs.getString("gps_folder_uri", null)
+    Log.d("GPS", "Saved data dir: ${savedUriString}")
 
-    Log.d("MultiTrack", "Requesting permissions")
+    Log.d("GPS", "Requesting permissions")
 
     var notificationGranted by remember {
         mutableStateOf(areNotificationsEnabled(context))
     }
-    Log.d("MultiTrack", "Notification permission status: ${notificationGranted}")
+    Log.d("GPS", "Notification permission status: ${notificationGranted}")
 
     var fineLocationGranted by remember {
         mutableStateOf(
@@ -192,7 +186,7 @@ fun SetupAndStartMainScreen(multiViewModel: MultiViewModel) {
     val backgroundLocationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        Log.d("MultiTrack", "Background location granted: ${backgroundLocationGranted}")
+        Log.d("GPS", "Background location granted: ${backgroundLocationGranted}")
         backgroundLocationGranted = true
     }
 
@@ -202,7 +196,7 @@ fun SetupAndStartMainScreen(multiViewModel: MultiViewModel) {
     ) { uri ->
         folderUri = uri
 
-        Log.d("MultiTrack", "Folder URI: ${uri}")
+        Log.d("GPS", "Folder URI: ${uri}")
         if (uri == null) {
             returnedFromFilePicker = true
             folderWanted = false
@@ -216,10 +210,10 @@ fun SetupAndStartMainScreen(multiViewModel: MultiViewModel) {
             )
 
             val gpsUri = createGpsSubfolder(context, it)
-            multiViewModel.setUserFolder(gpsUri)
+            gpsViewModel.setUserFolder(gpsUri)
 
             sharedPrefs.edit()
-                .putString("multi_tracker_folder_uri", gpsUri.toString())
+                .putString("gps_folder_uri", gpsUri.toString())
                 .apply()
 
             folderWanted = true
@@ -322,8 +316,8 @@ fun SetupAndStartMainScreen(multiViewModel: MultiViewModel) {
                 }
                 !folderGranted -> Text("")
                 else -> {
-                    Log.d("MultiTrack", "Permission requests completed; starting main interface")
-                    MultiTrackerRecorderScreen(multiViewModel)
+                    Log.d("GPS", "Permission requests completed; starting main interface")
+                    GPSRecorderScreen(gpsViewModel)
                 }
             }
         }
@@ -458,27 +452,22 @@ fun vibrate(context: Context, durationMillis: Long = 200) {
 }
 
 @Composable
-fun MultiTrackerRecorderScreen(viewModel: MultiViewModel) {
+fun GPSRecorderScreen(viewModel: GpsViewModel) {
     val context = LocalContext.current
-
-    val multiRecordingUiState by viewModel.multiUiState.collectAsState()
-
-    val gpsRecordingUiState by viewModel.gpsUiState.collectAsState()
+    val gpsRecordingUiState by viewModel.uiState.collectAsState()
     val neonRecordingUiState by viewModel.neonUiState.collectAsState()
 
-    val readyColor = Color.Cyan
-
-    // if (gpsRecordingUiState.isRecording && gpsRecordingUiState.numSamples == 1) {
-    //     vibrate(context)
-    //     Thread.sleep(500)
-    //     vibrate(context)
-    // }
+    if (gpsRecordingUiState.isRecording && gpsRecordingUiState.numSamples == 1) {
+        vibrate(context)
+        Thread.sleep(500)
+        vibrate(context)
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(50.dp),
-        verticalArrangement = Arrangement.Top,
+        verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -488,92 +477,72 @@ fun MultiTrackerRecorderScreen(viewModel: MultiViewModel) {
         )
 
         // Neon button and status
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(30.dp))
 
         // Text(
         //     text = "Neon Status",
         //     color = MaterialTheme.colorScheme.onBackground,
         //     style = MaterialTheme.typography.headlineMedium
         // )
-        // Spacer(modifier = Modifier.height(10.dp))
-        // NeonEventButton(viewModel)
-
-        // Spacer(modifier = Modifier.height(10.dp))
-
-        // GpsEventButton(viewModel)
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Button to check whether all devices are ready
-        DeviceStatusButton(viewModel)
-
+        Spacer(modifier = Modifier.height(10.dp))
+        NeonEventButton(viewModel)
         Text(
-            text = "Neon: ${neonRecordingUiState.statusMessage}",
-            color = if (neonRecordingUiState.isReady) readyColor else Color.Red,
-            textAlign = TextAlign.Center,
-        )
-
-        Text(
-            text = "GPS: ${gpsRecordingUiState.statusMessage}",
-            color = if (gpsRecordingUiState.isReady) readyColor else Color.Red,
-            textAlign = TextAlign.Center,
-            // modifier = Modifier.fillMaxWidth().height(85.dp)
-        )
-
-        // Text(
-        //     text = "Movella: ${movellaRecordingUiState.savedMessage}",
-        //     color = if (movellaRecordingUiState.isReady) MaterialTheme.colorScheme.onBackground else Color.Red,
-        //     textAlign = TextAlign.Center,
-        //     modifier = Modifier.fillMaxWidth().height(85.dp)
-        // )
-
-        Spacer(modifier = Modifier.height((10.dp)))
-
-        // Text(
-        //     // The messages shown here should really be placed in the GPSRecordingUiState
-        //     text = (
-        //             if (gpsRecordingUiState.isRecording && gpsRecordingUiState.numSamples == 0) {
-        //                 "Initializing sensor..."
-        //             } else if (gpsRecordingUiState.isRecording) {
-        //                 "Number of samples: ${gpsRecordingUiState.numSamples}"
-        //             } else {
-        //                 ""
-        //             }
-        //         ),
-        //     color = MaterialTheme.colorScheme.onBackground
-        // )
-
-
-        Text(
-            text = multiRecordingUiState.statusMessage,
+            text = neonRecordingUiState.statusMessage,
             // Make the font smaller to fit longer status messages
-            // style = MaterialTheme.typography.bodyMedium,
-            color = if (multiRecordingUiState.isReady) Color.Cyan else Color.Red,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().height(160.dp)
         )
 
-        Spacer(modifier = Modifier.height((30.dp)))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Button to start/stop multi recording if all devices are ready
-        MultiRecordingButton(
-            multiRecordingUiState.isRecording,
-            multiRecordingUiState.isReady,
-            onClick = { viewModel.startStopMultiRecording() }
+        GpsEventButton(viewModel)
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            text = gpsRecordingUiState.savedMessage,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().height(85.dp)
+        )
+
+        Spacer(modifier = Modifier.height((20.dp)))
+
+        Text(
+            text = (
+                    if (gpsRecordingUiState.isRecording && gpsRecordingUiState.numSamples == 0) {
+                        "Initializing sensor..."
+                    } else if (gpsRecordingUiState.isRecording) {
+                        "Number of samples: ${gpsRecordingUiState.numSamples}"
+                    } else {
+                        ""
+                    }
+                ),
+            color = MaterialTheme.colorScheme.onBackground
+        )
+
+        Spacer(modifier = Modifier.height((10.dp)))
+
+        GpsRecordingButton(
+            gpsRecordingUiState.isRecording,
+            gpsRecordingUiState.numSamples > 0,
+            onClick = { viewModel.startStopGpsRecording() }
         )
     }
 }
 
 @Composable
-fun MultiRecordingButton(
+fun GpsRecordingButton(
     isRecording: Boolean,
-    isReady: Boolean,
+    samplesObtained: Boolean,
     onClick: () -> Unit
 ) {
-    val backgroundColor = if (isRecording && isReady) {
+    val backgroundColor = if (isRecording && samplesObtained) {
         Color.Red
-    } else if (isReady) {
-        Color.Blue
+    } else if(isRecording) {
+        Color.Gray
     } else {
         Color.White
     }

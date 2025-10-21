@@ -16,11 +16,11 @@ import kotlinx.coroutines.withContext
 class GpsViewModel(
     private val repository: GpsRepository,
     private val geoCodingProvider: GeoCodingProvider,
-    private val httpProvider: HttpProvider,
+    private val neonProvider: NeonProvider,
     // Going to add a Movella Provider here later
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(GpsRecordingUiState())
-    val uiState: StateFlow<GpsRecordingUiState> = _uiState.asStateFlow()
+    private val _gpsUiState = MutableStateFlow(GpsRecordingUiState())
+    val uiState: StateFlow<GpsRecordingUiState> = _gpsUiState.asStateFlow()
 
     private val _neonUiState = MutableStateFlow(NeonRecordingUiState())
     val neonUiState: StateFlow<NeonRecordingUiState> = _neonUiState.asStateFlow()
@@ -30,7 +30,7 @@ class GpsViewModel(
     }
 
     suspend fun checkNeonStatus() {
-        val status_message = httpProvider.getNeonStatus()
+        val status_message = neonProvider.getNeonStatus()
 
         _neonUiState.update { it.copy(
             statusMessage = status_message
@@ -65,7 +65,7 @@ class GpsViewModel(
             }
         }
 
-        _uiState.update { it.copy(
+        _gpsUiState.update { it.copy(
             isRecording = isRecording,
             dataSaved = !isRecording,
             statusMessage = statusMessage,
@@ -78,7 +78,7 @@ class GpsViewModel(
 
     fun fetchGpsNumSamples() {
         val currentNumSamples = repository.currentNumSamples()
-        _uiState.update { it.copy(numSamples = currentNumSamples) }
+        _gpsUiState.update { it.copy(numSamples = currentNumSamples) }
     }
 
     fun listenGpsNumSamples() {
@@ -88,7 +88,7 @@ class GpsViewModel(
             withContext(Dispatchers.IO) {
                 while (true) {
                     val currentNumSamples = repository.currentNumSamples()
-                    _uiState.update { it.copy(numSamples = currentNumSamples) }
+                    _gpsUiState.update { it.copy(numSamples = currentNumSamples) }
                 }
             }
         }
@@ -114,6 +114,6 @@ class GpsViewModel(
                 event.setName("gps_event")
             }
         }
-        httpProvider.sendEvent(event)
+        neonProvider.sendEvent(event)
     }
 }

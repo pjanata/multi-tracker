@@ -23,6 +23,7 @@ class GpsRepository(
     private val context: Context,
     private val gpsDataSource: GpsDataSource
 ) {
+    private var isInitialized = false
     private var isRecording = false
 
     private val gpsData = mutableListOf<GpsApiModel>()
@@ -81,19 +82,35 @@ class GpsRepository(
         _userFolder = userFolder
     }
 
-    fun startGpsRecording() {
+    fun initializeGpsRecording(): Pair<Boolean, String?>  {
+        Log.d("GPS", "Initializing GPS recording")
         bindService()
 
-        val fileparts = openCSVFile()
-        csvFile = fileparts.first
-        csvPath = fileparts.second
+        try {
+            val fileparts = openCSVFile()
+            csvFile = fileparts.first
+            csvPath = fileparts.second
 
-        val outputStream = context.contentResolver.openOutputStream(csvFile?.uri!!, "wa")
-        csvWriter = BufferedWriter(OutputStreamWriter(outputStream!!)).apply {
-            write("timestamp [ns],latitude,longitude\n")
-            flush()
+            val outputStream = context.contentResolver.openOutputStream(csvFile?.uri!!, "wa")
+            csvWriter = BufferedWriter(OutputStreamWriter(outputStream!!)).apply {
+                write("timestamp [ns],latitude,longitude\n")
+                flush()
+            }
+            isInitialized = true
+        } catch (e: Exception) {
+            Log.d("GPS", "Error initializing GPS recording", e)
+            isInitialized = false
         }
 
+        return isInitialized to csvPath
+    }
+
+    fun startGpsRecording() {
+        Log.d("GPS", "Starting GPS recording")
+
+        if (!isInitialized) {
+            initializeGpsRecording()
+        }
 //        gpsDataSource.startGpsRecording()
 
         val intent = Intent(context, GpsLocalProvider::class.java)
@@ -125,7 +142,6 @@ class GpsRepository(
 
         if (isRecording) {
             stopGpsRecording()
-//            val csvPath = saveGPSData()
             gpsData.clear()
             isRecording = !isRecording
             return isRecording to csvPath
