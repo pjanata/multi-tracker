@@ -57,7 +57,7 @@ class MultiViewModel(
             isReadyOverall = false
         } else {
             neon_status_message = "Ready"
-            Log.d("MT_CORE", "Neon ready")
+            Log.d("MT_CORE", "Neon ready: ${neon_status_message}")
         }
 
         _neonUiState.update { it.copy(
