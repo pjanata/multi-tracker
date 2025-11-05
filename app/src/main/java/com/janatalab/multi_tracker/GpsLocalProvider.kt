@@ -52,7 +52,7 @@ class GpsLocalProvider() : GpsApi, Service() {
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
             result.lastLocation?.let { loc: Location ->
-                Log.d("GPS", "Received Location Result")
+                Log.d("MT_GPS", "Received Location Result")
                 val locationUtcNanos = loc.elapsedRealtimeNanos + offsetNanos
                 val gpsDatum = GpsApiModel(
                     locationUtcNanos,
@@ -75,7 +75,7 @@ class GpsLocalProvider() : GpsApi, Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP_SERVICE) {
-            Log.d("GPS", "Received stop intent")
+            Log.d("MT_GPS", "Received stop intent")
             stopGpsRecording()
             stopForeground(true)
             stopSelf()
@@ -112,7 +112,7 @@ class GpsLocalProvider() : GpsApi, Service() {
     }
 
     override fun startGpsRecording(): Boolean {
-        Log.d("GPS", "Requesting start of GPS recording")
+        Log.d("MT_GPS", "Requesting start of GPS recording")
 
         // Configure the LocationRequest to update as fast as possible.
         val locationRequest = LocationRequest.Builder(
@@ -124,7 +124,7 @@ class GpsLocalProvider() : GpsApi, Service() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            Log.d("GPS", "Permissions granted, starting GPS recording")
+            Log.d("MT_GPS", "Permissions granted, starting GPS recording")
 
             fusedLocationClient.requestLocationUpdates(
                 locationRequest,
@@ -141,7 +141,7 @@ class GpsLocalProvider() : GpsApi, Service() {
     }
 
     override fun stopGpsRecording(): Boolean {
-        Log.d("GPS", "Stopping GPS recording")
+        Log.d("MT_GPS", "Stopping GPS recording")
 
         fusedLocationClient.removeLocationUpdates(locationCallback)
 

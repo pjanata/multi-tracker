@@ -45,7 +45,7 @@ class GpsRepository(
                     flow
                         .chunked(10)
                         .collect { batch ->
-                            Log.d("GPS", "Got a batch of GPS data")
+                            Log.d("MT_GPS", "Got a batch of GPS data")
                             batch.forEach {
                                 gpsData.add(it)
                             }
@@ -83,7 +83,7 @@ class GpsRepository(
     }
 
     fun initializeGpsRecording(): Pair<Boolean, String?>  {
-        Log.d("GPS", "Initializing GPS recording")
+        Log.d("MT_GPS", "Initializing GPS recording")
         bindService()
 
         try {
@@ -98,7 +98,7 @@ class GpsRepository(
             }
             isInitialized = true
         } catch (e: Exception) {
-            Log.d("GPS", "Error initializing GPS recording", e)
+            Log.d("MT_GPS", "Error initializing GPS recording", e)
             isInitialized = false
         }
 
@@ -106,7 +106,7 @@ class GpsRepository(
     }
 
     fun startGpsRecording() {
-        Log.d("GPS", "Starting GPS recording")
+        Log.d("MT_GPS", "Starting GPS recording")
 
         if (!isInitialized) {
             initializeGpsRecording()
@@ -116,11 +116,11 @@ class GpsRepository(
         val intent = Intent(context, GpsLocalProvider::class.java)
         ContextCompat.startForegroundService(context, intent)
 
-        Log.d("GPS", "Sent Foreground service intent")
+        Log.d("MT_GPS", "Sent Foreground service intent")
     }
 
     fun stopGpsRecording() {
-        Log.d("GPS", "Sending stop intent")
+        Log.d("MT_GPS", "Sending stop intent")
 
         val stopIntent = Intent(context, GpsLocalProvider::class.java).apply {
             action = GpsLocalProvider.ACTION_STOP_SERVICE
@@ -138,7 +138,7 @@ class GpsRepository(
     }
 
     fun startStopGpsRecording(): Pair<Boolean, String?> {
-        Log.d("GPS", "Toggling GPS recording state")
+        Log.d("MT_GPS", "Toggling GPS recording state")
 
         if (isRecording) {
             stopGpsRecording()
@@ -174,8 +174,8 @@ class GpsRepository(
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val fileName = "gps_$timestamp.csv"
 
-        Log.d("GPS", "${savedUri}")
-        Log.d("GPS", fileName)
+        Log.d("MT_GPS", "${savedUri}")
+        Log.d("MT_GPS", fileName)
 
         val gpsFolder = DocumentFile.fromTreeUri(context, _userFolder!!)
         val file = gpsFolder?.createFile("text/csv", fileName)
@@ -186,18 +186,18 @@ class GpsRepository(
     fun saveGPSData(): String? {
         val gpsData = fecthAllGpsData()
 
-        Log.d("GPS", "Preparing to save GPS data")
-        Log.d("GPS", "Size of gpsData: ${gpsData.size}")
+        Log.d("MT_GPS", "Preparing to save GPS data")
+        Log.d("MT_GPS", "Size of gpsData: ${gpsData.size}")
 
         if (gpsData.isNotEmpty()) {
-            Log.d("GPS", "Saving GPS data")
+            Log.d("MT_GPS", "Saving GPS data")
 
             try {
                 val fileparts = openCSVFile()
                 val file = fileparts.first
                 val fileName = fileparts.second
 
-                Log.d("GPSWriter", "Writing to: ${file?.uri}")
+                Log.d("MT_GPSWriter", "Writing to: ${file?.uri}")
 
                 val csv = buildString{
                     //                writer.append("timestamp [ns],latitude,longitude,altitude,accuracy,speed,bearing\n")

@@ -68,7 +68,7 @@ class MainActivity : ComponentActivity() {
         val geoCodingProvider = GeoCodingProvider(geocoder)
 
         // neon's real-time api can be accessed via localhost when running on same phone
-        val neonProvider = NeonProvider("http://localhost:8080/api")
+        val neonProvider = NeonProvider("http://localhost:8080/api", enableLogging = false)
 
         val gpsLocalProvider = GpsLocalProvider()
         val gpsLocalDataSource = GpsDataSource(gpsLocalProvider)
@@ -87,7 +87,7 @@ class MainActivity : ComponentActivity() {
         // rather than the ViewModel
         multiViewModel.listenGpsNumSamples()
 
-        Log.d("MultiTrack", "Initialized all Providers and ViewModel")
+        Log.d("MT_CORE", "Initialized all Providers and ViewModel")
 
         setContent {
             BlackWhiteTheme() {
@@ -132,14 +132,14 @@ fun SetupAndStartMainScreen(multiViewModel: MultiViewModel) {
     val context = LocalContext.current
     val sharedPrefs = context.getSharedPreferences("multi_tracker_prefs", Context.MODE_PRIVATE)
     val savedUriString = sharedPrefs.getString("multi_tracker_folder_uri", null)
-    Log.d("MultiTrack", "Saved data dir: ${savedUriString}")
+    Log.d("MT_CORE", "Saved data dir: ${savedUriString}")
 
-    Log.d("MultiTrack", "Requesting permissions")
+    Log.d("MT_CORE", "Requesting permissions")
 
     var notificationGranted by remember {
         mutableStateOf(areNotificationsEnabled(context))
     }
-    Log.d("MultiTrack", "Notification permission status: ${notificationGranted}")
+    Log.d("MT_CORE", "Notification permission status: ${notificationGranted}")
 
     var fineLocationGranted by remember {
         mutableStateOf(
@@ -192,7 +192,7 @@ fun SetupAndStartMainScreen(multiViewModel: MultiViewModel) {
     val backgroundLocationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        Log.d("MultiTrack", "Background location granted: ${backgroundLocationGranted}")
+        Log.d("MT_CORE", "Background location granted: ${backgroundLocationGranted}")
         backgroundLocationGranted = true
     }
 
@@ -202,7 +202,7 @@ fun SetupAndStartMainScreen(multiViewModel: MultiViewModel) {
     ) { uri ->
         folderUri = uri
 
-        Log.d("MultiTrack", "Folder URI: ${uri}")
+        Log.d("MT_CORE", "Folder URI: ${uri}")
         if (uri == null) {
             returnedFromFilePicker = true
             folderWanted = false
@@ -322,8 +322,8 @@ fun SetupAndStartMainScreen(multiViewModel: MultiViewModel) {
                 }
                 !folderGranted -> Text("")
                 else -> {
-                    Log.d("MultiTrack", "Permission requests completed; starting main interface")
-                    MultiTrackerRecorderScreen(multiViewModel)
+                    Log.d("MT_CORE", "Permission requests completed; starting main interface")
+                    MT_COREerRecorderScreen(multiViewModel)
                 }
             }
         }
@@ -339,16 +339,16 @@ fun createGpsSubfolder(context: Context, parentUri: Uri): Uri? {
     var gpsFolderUri = findFolderUri(context, docUri, "GPS")
 
     if (gpsFolderUri != null) {
-        Log.d("GPS", "Folder already exists")
+        Log.d("MT_GPS", "Folder already exists")
     } else {
-        Log.d("GPS", "Creating GPS folder...")
+        Log.d("MT_GPS", "Creating GPS folder...")
         gpsFolderUri = DocumentsContract.createDocument(
             context.contentResolver,
             docUri,
             DocumentsContract.Document.MIME_TYPE_DIR,
             "GPS"
         )
-        Log.d("GPS", "Created GPS folder: $gpsFolderUri")
+        Log.d("MT_GPS", "Created GPS folder: $gpsFolderUri")
     }
 
     return gpsFolderUri
@@ -458,7 +458,7 @@ fun vibrate(context: Context, durationMillis: Long = 200) {
 }
 
 @Composable
-fun MultiTrackerRecorderScreen(viewModel: MultiViewModel) {
+fun MT_COREerRecorderScreen(viewModel: MultiViewModel) {
     val context = LocalContext.current
 
     val multiRecordingUiState by viewModel.multiUiState.collectAsState()

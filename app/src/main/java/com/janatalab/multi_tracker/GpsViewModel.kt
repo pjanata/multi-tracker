@@ -82,7 +82,7 @@ class GpsViewModel(
     }
 
     fun listenGpsNumSamples() {
-        Log.d("GPS", "Listening for GPS data updates in separate coroutine")
+        Log.d("MT_GPS", "Listening for GPS data updates in separate coroutine")
 
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
@@ -104,11 +104,11 @@ class GpsViewModel(
                 val gpsDatum = repository.fetchLatestGpsData()
                 address = geoCodingProvider.geocode(gpsDatum)
             } catch (e: Exception) {
-                Log.d("GPS", "No geocoding available")
+                Log.d("MT_GPS", "No geocoding available")
                 e.printStackTrace()
             }
             if (address != null) {
-                Log.d("GPS", "Geocoding successful: ${address}")
+                Log.d("MT_GPS", "Geocoding successful: ${address}")
                 event.setName(address)
             } else {
                 event.setName("gps_event")

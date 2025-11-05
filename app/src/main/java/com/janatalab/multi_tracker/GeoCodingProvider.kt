@@ -11,7 +11,7 @@ class GeoCodingProvider(private val geocoder: Geocoder) {
             1
         )
 
-        Log.d("GPS", "Requested geocoding")
+        Log.d("MT_GPS", "Requested geocoding")
 
         if (addresses != null && addresses.isNotEmpty()) {
             return addresses[0].getAddressLine(0)
