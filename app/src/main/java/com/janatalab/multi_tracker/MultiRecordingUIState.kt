@@ -4,6 +4,7 @@ data class MultiRecordingUiState(
     // This is the overall recording state
     val isRecording: Boolean = false,
     val isReady: Boolean = false,
+    val showCheckStatusButton: Boolean = true,
 
     // Get the individual component states
 

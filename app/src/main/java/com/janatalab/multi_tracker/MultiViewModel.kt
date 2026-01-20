@@ -249,10 +249,12 @@ class MultiViewModel(
             
             _multiUiState.update {
                 it.copy(
-                    isRecording = true
+                    isRecording = true,
+                    showCheckStatusButton = false,
+                    statusMessage = ""
                 )
             }
-            
+           
         } else {
             // STOPPING RECORDING
             
@@ -316,7 +318,8 @@ class MultiViewModel(
                 it.copy(
                     isRecording = false,
                     isReady = false,
-                    statusMessage = "Not ready"
+                    statusMessage = "Not ready",
+                    showCheckStatusButton = true
                 )
             }
         }

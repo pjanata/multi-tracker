@@ -13,20 +13,22 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 @Composable
-fun DeviceStatusButton(viewModel: MultiViewModel) {
+fun DeviceStatusButton(viewModel: MultiViewModel, showButton: Boolean) {
     val coroutineScope = rememberCoroutineScope()
 
-    Button(
-        modifier = Modifier
-            .padding(16.dp)
-            .height(50.dp)                 // Taller button
-            .width(180.dp),               // Wider button (or use .fillMaxWidth())
-        shape = RoundedCornerShape(50),   // Elliptical shape
-        onClick = {
-        coroutineScope.launch {
-            viewModel.checkDeviceStatus()
+    if (showButton) {
+        Button(
+            modifier = Modifier
+                .padding(16.dp)
+                .height(50.dp)                 // Taller button
+                .width(180.dp),               // Wider button (or use .fillMaxWidth())
+            shape = RoundedCornerShape(50),   // Elliptical shape
+            onClick = {
+            coroutineScope.launch {
+                viewModel.checkDeviceStatus()
+            }
+        }) {
+            Text("Check Device Status")
         }
-    }) {
-        Text("Check Device Status")
     }
 }

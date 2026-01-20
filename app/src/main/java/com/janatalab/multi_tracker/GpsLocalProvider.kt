@@ -30,6 +30,7 @@ class GpsLocalProvider() : GpsApi, Service() {
     companion object {
         const val NOTIFICATION_ID = 1234
         val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
+        const val VERBOSE = false  // Set to true to enable debug logging
     }
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -53,7 +54,7 @@ class GpsLocalProvider() : GpsApi, Service() {
     }
 
     override fun onBind(intent: Intent): IBinder {
-        Log.d("MT_GPS", "onBind called, starting foreground service")
+        if (VERBOSE) Log.d("MT_GPS", "onBind called, starting foreground service")
         // Start foreground when binding (needed for BIND_AUTO_CREATE case)
         startForegroundService()
         return LocalBinder()
@@ -61,12 +62,12 @@ class GpsLocalProvider() : GpsApi, Service() {
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
-            Log.d("MT_GPS", "onLocationResult called with ${result.locations.size} locations")
+            if (VERBOSE) Log.d("MT_GPS", "onLocationResult called with ${result.locations.size} locations")
             result.lastLocation?.let { loc: Location ->
                 // Store the most recent location for readiness checks
                 lastReceivedLocation = loc
                 
-                Log.d("MT_GPS", "Received Location: lat=${loc.latitude}, lon=${loc.longitude}, time=${loc.elapsedRealtimeNanos}")
+                if (VERBOSE) Log.d("MT_GPS", "Received Location: lat=${loc.latitude}, lon=${loc.longitude}, time=${loc.elapsedRealtimeNanos}")
                 val locationUtcNanos = loc.elapsedRealtimeNanos + offsetNanos
                 val gpsDatum = GpsApiModel(
                     locationUtcNanos,
@@ -78,7 +79,7 @@ class GpsLocalProvider() : GpsApi, Service() {
                     loc.bearing
                  )
                 val emitResult = _gpsDataFlow.tryEmit(gpsDatum)
-                Log.d("MT_GPS", "Emitted GPS data to flow: success=$emitResult")
+                if (VERBOSE) Log.d("MT_GPS", "Emitted GPS data to flow: success=$emitResult")
             }
         }
     }
@@ -92,12 +93,12 @@ class GpsLocalProvider() : GpsApi, Service() {
         handlerThread.start()
         locationLooper = handlerThread.looper
         
-        Log.d("MT_GPS", "GpsLocalProvider created with background looper")
+        if (VERBOSE) Log.d("MT_GPS", "GpsLocalProvider created with background looper")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP_SERVICE) {
-            Log.d("MT_GPS", "Received stop intent")
+            if (VERBOSE) Log.d("MT_GPS", "Received stop intent")
             stopGpsRecording()
             stopForeground(true)
             stopSelf()
@@ -108,7 +109,7 @@ class GpsLocalProvider() : GpsApi, Service() {
         startForegroundService()
 
         // 2. Don't start GPS recording here - wait for explicit call after binding completes
-        Log.d("MT_GPS", "Service started, waiting for binding to complete before GPS recording")
+        if (VERBOSE) Log.d("MT_GPS", "Service started, waiting for binding to complete before GPS recording")
 
         // If the system kills the service, do NOT recreate until explicitly started again
         return START_STICKY
@@ -134,21 +135,21 @@ class GpsLocalProvider() : GpsApi, Service() {
     }
 
     override fun startGpsRecording(): Boolean {
-        Log.d("MT_GPS", "Requesting start of GPS recording")
+        if (VERBOSE) Log.d("MT_GPS", "Requesting start of GPS recording")
 
         // Configure the LocationRequest with a reasonable update interval
         // Note: 0L is too aggressive and may not work on all devices
         val locationRequest = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY,
-            1000L)  // Update every 1000 milliseconds
+            100L)  // Update every 100 milliseconds
             .setMinUpdateIntervalMillis(10L)  // But accept updates as fast as every 10ms
-            .setWaitForAccurateLocation(false)  // Don't wait, give us what you have
+            .setWaitForAccurateLocation(true)  // Wait for best accuracy
             .build()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             == PackageManager.PERMISSION_GRANTED
         ) {
-            Log.d("MT_GPS", "Permissions granted, checking last known location")
+            if (VERBOSE) Log.d("MT_GPS", "Permissions granted, checking last known location")
             
             // Try to get last known location synchronously using await-like pattern
             var lastLocationFound = false
@@ -156,13 +157,13 @@ class GpsLocalProvider() : GpsApi, Service() {
                 val locationTask = fusedLocationClient.lastLocation
                 locationTask.addOnSuccessListener { location ->
                     if (location != null) {
-                        Log.d("MT_GPS", "Got last known location: lat=${location.latitude}, lon=${location.longitude}, accuracy=${location.accuracy}m")
+                        if (VERBOSE) Log.d("MT_GPS", "Got last known location: lat=${location.latitude}, lon=${location.longitude}, accuracy=${location.accuracy}m")
                         val ageSeconds = (System.currentTimeMillis() - location.time) / 1000
                         val maxAgeSeconds = 5
                         
                         if (ageSeconds <= maxAgeSeconds) {
                             lastLocationFound = true
-                            Log.d("MT_GPS", "Last known location is current (age=${ageSeconds}s)")
+                            if (VERBOSE) Log.d("MT_GPS", "Last known location is current (age=${ageSeconds}s)")
                         } else {
                             Log.w("MT_GPS", "Last known location is too old (age=${ageSeconds}s)")
                         }
@@ -177,7 +178,7 @@ class GpsLocalProvider() : GpsApi, Service() {
                 Log.e("MT_GPS", "Exception getting last known location: ${e.message}")
             }
             
-            Log.d("MT_GPS", "Starting location updates on background thread")
+            if (VERBOSE) Log.d("MT_GPS", "Starting location updates on background thread")
             fusedLocationClient.requestLocationUpdates(
                 locationRequest,
                 locationCallback,
@@ -185,7 +186,7 @@ class GpsLocalProvider() : GpsApi, Service() {
             )
 
             isRecording = true
-            Log.d("MT_GPS", "GPS recording started (last known location found: $lastLocationFound)")
+            if (VERBOSE) Log.d("MT_GPS", "GPS recording started (last known location found: $lastLocationFound)")
             return isRecording
         } else {
             Log.e("MT_GPS", "Location permission not granted!")
@@ -195,7 +196,7 @@ class GpsLocalProvider() : GpsApi, Service() {
     }
 
     override fun stopGpsRecording(): Boolean {
-        Log.d("MT_GPS", "Stopping GPS recording")
+        if (VERBOSE) Log.d("MT_GPS", "Stopping GPS recording")
 
         fusedLocationClient.removeLocationUpdates(locationCallback)
         
@@ -242,7 +243,7 @@ class GpsLocalProvider() : GpsApi, Service() {
                             val maxAgeSeconds = 5
                             
                             if (ageSeconds <= maxAgeSeconds) {
-                                Log.d("MT_GPS", "GPS ready - current location obtained: lat=${location.latitude}, lon=${location.longitude}, accuracy=${location.accuracy}m, age=${ageSeconds}s")
+                                if (VERBOSE) Log.d("MT_GPS", "GPS ready - current location obtained: lat=${location.latitude}, lon=${location.longitude}, accuracy=${location.accuracy}m, age=${ageSeconds}s")
                                 continuation.resume(true)
                             } else {
                                 Log.w("MT_GPS", "GPS not ready - location too old (${ageSeconds}s)")

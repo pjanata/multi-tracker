@@ -505,7 +505,7 @@ fun MT_COREerRecorderScreen(viewModel: MultiViewModel) {
         Spacer(modifier = Modifier.height(20.dp))
 
         // Button to check whether all devices are ready
-        DeviceStatusButton(viewModel)
+        DeviceStatusButton(viewModel, multiRecordingUiState.showCheckStatusButton)
 
         Text(
             text = "Neon: ${neonRecordingUiState.statusMessage}",
