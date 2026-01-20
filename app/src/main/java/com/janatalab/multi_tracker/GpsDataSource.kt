@@ -5,4 +5,5 @@ class GpsDataSource(
 ) {
     fun startGpsRecording() = gpsApi.startGpsRecording()
     fun stopGpsRecording() = gpsApi.stopGpsRecording()
+    suspend fun checkGpsReady() = gpsApi.checkGpsReady()
 }

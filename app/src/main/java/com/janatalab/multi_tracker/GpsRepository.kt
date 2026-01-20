@@ -23,47 +23,53 @@ class GpsRepository(
     private val context: Context,
     private val gpsDataSource: GpsDataSource
 ) {
-    private var isRecording = false
+    companion object {
+        const val VERBOSE = false  // Set to true to enable debug logging
+    }
+    // private var isInitialized = false
+    // private var isRecording = false
+    var isInitialized = false
+    var isRecording = false
+    private var isBound = false
+    private var initializationAttempted = false
 
     private val gpsData = mutableListOf<GpsApiModel>()
 
     private var csvFile: DocumentFile? = null
     private var csvWriter: BufferedWriter? = null
     private var writerJob: Job? = null
-    private var csvPath: String? = null
+    var csvPath: String? = null
 
     private var service: GpsLocalProvider? = null
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            if (VERBOSE) Log.d("MT_GPS", "Service connected, starting flow collection")
+            isBound = true
             val localBinder = binder as? GpsLocalProvider.LocalBinder
-            val service = localBinder?.getService()
+            service = localBinder?.getService()
 
             service?.gpsDataFlow?.let { flow ->
                 writerJob = CoroutineScope(Dispatchers.IO).launch {
-                    flow
-                        .chunked(10)
-                        .collect { batch ->
-                            Log.d("GPS", "Got a batch of GPS data")
-                            batch.forEach {
-                                gpsData.add(it)
-                            }
-
-                            //                        csvWriter?.write("${it.timestamp},${it.latitude},${it.longitude}\n")
-                            //                        csvWriter?.flush()
-
-                            val lines = batch.joinToString("\n") { it ->
-                                "${it.timestamp},${it.latitude},${it.longitude}\n"
-                            }
-                            csvWriter?.write(lines + "\n")
-                            csvWriter?.flush()
-                        }
+                    flow.collect { gpsDatum ->
+                        if (VERBOSE) Log.d("MT_GPS", "Received GPS data point")
+                        gpsData.add(gpsDatum)
+                        
+                        // Write immediately to CSV
+                        csvWriter?.write("${gpsDatum.timestamp},${gpsDatum.latitude},${gpsDatum.longitude},${gpsDatum.accuracy}\n")
+                        csvWriter?.flush()
+                    }
                 }
             }
+            
+            // Now that binding is complete and collector is ready, trigger service to start GPS
+            service?.startGpsRecording()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
+            if (VERBOSE) Log.d("MT_GPS", "Service disconnected")
             service = null
+            isBound = false
         }
     }
 
@@ -73,7 +79,31 @@ class GpsRepository(
     }
 
     fun unbindService() {
-        context.unbindService(serviceConnection)
+        if (isBound) {
+            if (VERBOSE) Log.d("MT_GPS", "Unbinding service")
+            context.unbindService(serviceConnection)
+            isBound = false
+        }
+    }
+    
+    fun cleanupFailedInitialization() {
+        if (VERBOSE) Log.d("MT_GPS", "Cleaning up failed initialization")
+        
+        // Delete the CSV file if it was created
+        csvFile?.delete()
+        csvFile = null
+        csvPath = null
+        
+        // Close writer if open
+        csvWriter?.close()
+        csvWriter = null
+        
+        // Unbind service
+        unbindService()
+        
+        // Reset flags
+        isInitialized = false
+        initializationAttempted = false
     }
 
     private var _userFolder: Uri? = null
@@ -81,29 +111,75 @@ class GpsRepository(
         _userFolder = userFolder
     }
 
-    fun startGpsRecording() {
+    fun initializeGpsRecording(): Pair<Boolean, String?>  {
+        if (VERBOSE) Log.d("MT_GPS", "Initializing GPS recording")
+        
+        // If already attempted initialization in this session, don't do it again
+        if (initializationAttempted && isBound) {
+            if (VERBOSE) Log.d("MT_GPS", "Already attempted initialization in this session")
+            return isInitialized to csvPath
+        }
+        
+        initializationAttempted = true
         bindService()
+        isInitialized = true
 
-        val fileparts = openCSVFile()
-        csvFile = fileparts.first
-        csvPath = fileparts.second
+        return isInitialized to csvPath
+    }
+    
+    private fun createCsvFile() {
+        try {
+            val fileparts = openCSVFile()
+            csvFile = fileparts.first
+            csvPath = fileparts.second
 
-        val outputStream = context.contentResolver.openOutputStream(csvFile?.uri!!, "wa")
-        csvWriter = BufferedWriter(OutputStreamWriter(outputStream!!)).apply {
-            write("timestamp [ns],latitude,longitude\n")
-            flush()
+            val outputStream = context.contentResolver.openOutputStream(csvFile?.uri!!, "wa")
+            csvWriter = BufferedWriter(OutputStreamWriter(outputStream!!)).apply {
+                // write("timestamp [ns],latitude,longitude\n")
+                write("timestamp [ns],latitude,longitude,accuracy\n")
+                flush()
+            }
+            Log.d("MT_GPS", "CSV file created: $csvPath")
+        } catch (e: Exception) {
+            Log.e("MT_GPS", "Error creating CSV file", e)
+            throw e
+        }
+    }
+
+    fun startGpsRecording() {
+        if (VERBOSE) Log.d("MT_GPS", "Starting GPS recording (isBound=$isBound, isInitialized=$isInitialized)")
+
+        if (!isInitialized) {
+            initializeGpsRecording()
+        }
+        
+        // If not bound (e.g., after stopping a previous recording), re-bind now
+        if (!isBound) {
+            if (VERBOSE) Log.d("MT_GPS", "Service not bound, binding now")
+            bindService()
+            // Note: onServiceConnected will call startGpsRecording() when binding completes
+        }
+        
+        // Create the CSV file now that we're actually starting to record
+        if (csvFile == null) {
+            createCsvFile()
         }
 
-//        gpsDataSource.startGpsRecording()
-
+        // Always start the foreground service to ensure GPS collection works
+        // Even if bound, the service needs to be in foreground mode
+        if (VERBOSE) Log.d("MT_GPS", "Starting foreground service for GPS recording")
         val intent = Intent(context, GpsLocalProvider::class.java)
         ContextCompat.startForegroundService(context, intent)
-
-        Log.d("GPS", "Sent Foreground service intent")
+        
+        // If already bound, also trigger recording directly
+        if (isBound) {
+            if (VERBOSE) Log.d("MT_GPS", "Already bound, also triggering GPS recording directly")
+            service?.startGpsRecording()
+        }
     }
 
     fun stopGpsRecording() {
-        Log.d("GPS", "Sending stop intent")
+        if (VERBOSE) Log.d("MT_GPS", "Sending stop intent")
 
         val stopIntent = Intent(context, GpsLocalProvider::class.java).apply {
             action = GpsLocalProvider.ACTION_STOP_SERVICE
@@ -116,16 +192,19 @@ class GpsRepository(
         csvWriter?.flush()
         csvWriter?.close()
         csvWriter = null
+        
+        // Reset csvFile and csvPath so a new file is created for the next recording
+        csvFile = null
+        csvPath = null
 
         unbindService()
     }
 
     fun startStopGpsRecording(): Pair<Boolean, String?> {
-        Log.d("GPS", "Toggling GPS recording state")
+        Log.d("MT_GPS", "Toggling GPS recording state")
 
         if (isRecording) {
             stopGpsRecording()
-//            val csvPath = saveGPSData()
             gpsData.clear()
             isRecording = !isRecording
             return isRecording to csvPath
@@ -141,15 +220,32 @@ class GpsRepository(
         return Gps(latestGpsDatum?.timestamp!!, latestGpsDatum.latitude, latestGpsDatum.longitude)
     }
 
-    fun fecthAllGpsData(): List<Gps> {
-        return gpsData.map { Gps(it.timestamp, it.latitude, it.longitude) }
+    // fun fecthAllGpsData(): List<Gps> {
+    //     return gpsData.map { Gps(it.timestamp, it.latitude, it.longitude) }
+    // }
+
+    // fun currentNumSamples() = gpsData.size
+
+    suspend fun checkGpsReady(): Boolean {
+        // Check if service is bound and available
+        if (service == null) {
+            Log.e("MT_GPS", "Cannot check GPS ready - service not bound")
+            return false
+        }
+        
+        return try {
+            service?.checkGpsReady() ?: false
+        } catch (e: Exception) {
+            Log.e("MT_GPS", "Exception checking GPS ready: ${e.message}")
+            false
+        }
     }
 
-    fun currentNumSamples() = gpsData.size
-
     fun openCSVFile(): Pair<DocumentFile?, String> {
-        val prefs = context.getSharedPreferences("gps_prefs", Context.MODE_PRIVATE)
-        val uriString = prefs.getString("gps_folder_uri", null)
+        // val prefs = context.getSharedPreferences("gps_prefs", Context.MODE_PRIVATE)
+        // val uriString = prefs.getString("gps_folder_uri", null)
+        val prefs = context.getSharedPreferences("multi_tracker_prefs", Context.MODE_PRIVATE)
+        val uriString = prefs.getString("multi_tracker_folder_uri", null)
         val savedUri = uriString?.let { Uri.parse(it) }
         if (savedUri != null && hasUriPermission(context, savedUri)) {
             _userFolder = savedUri
@@ -158,8 +254,8 @@ class GpsRepository(
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val fileName = "gps_$timestamp.csv"
 
-        Log.d("GPS", "${savedUri}")
-        Log.d("GPS", fileName)
+        if (VERBOSE) Log.d("MT_GPS", "${savedUri}")
+        Log.d("MT_GPS", fileName)
 
         val gpsFolder = DocumentFile.fromTreeUri(context, _userFolder!!)
         val file = gpsFolder?.createFile("text/csv", fileName)
@@ -167,45 +263,45 @@ class GpsRepository(
         return file to fileName
     }
 
-    fun saveGPSData(): String? {
-        val gpsData = fecthAllGpsData()
+    // fun saveGPSData(): String? {
+    //     val gpsData = fecthAllGpsData()
 
-        Log.d("GPS", "Preparing to save GPS data")
-        Log.d("GPS", "Size of gpsData: ${gpsData.size}")
+    //     Log.d("MT_GPS", "Preparing to save GPS data")
+    //     Log.d("MT_GPS", "Size of gpsData: ${gpsData.size}")
 
-        if (gpsData.isNotEmpty()) {
-            Log.d("GPS", "Saving GPS data")
+    //     if (gpsData.isNotEmpty()) {
+    //         Log.d("MT_GPS", "Saving GPS data")
 
-            try {
-                val fileparts = openCSVFile()
-                val file = fileparts.first
-                val fileName = fileparts.second
+    //         try {
+    //             val fileparts = openCSVFile()
+    //             val file = fileparts.first
+    //             val fileName = fileparts.second
 
-                Log.d("GPSWriter", "Writing to: ${file?.uri}")
+    //             Log.d("MT_GPSWriter", "Writing to: ${file?.uri}")
 
-                val csv = buildString{
-                    //                writer.append("timestamp [ns],latitude,longitude,altitude,accuracy,speed,bearing\n")
-                    //                    writer.append("${record.timestamp},${record.latitude},${record.longitude},${record.altitude},${record.accuracy},${record.speed},${record.bearing}\n")
-                    append("timestamp [ns],latitude,longitude\n")
-                    gpsData.forEach { record ->
-                        append("${record.timestamp},${record.latitude},${record.longitude}\n")
-                    }
-                }
+    //             val csv = buildString{
+    //                 //                writer.append("timestamp [ns],latitude,longitude,altitude,accuracy,speed,bearing\n")
+    //                 //                    writer.append("${record.timestamp},${record.latitude},${record.longitude},${record.altitude},${record.accuracy},${record.speed},${record.bearing}\n")
+    //                 append("timestamp [ns],latitude,longitude\n")
+    //                 gpsData.forEach { record ->
+    //                     append("${record.timestamp},${record.latitude},${record.longitude}\n")
+    //                 }
+    //             }
 
-                file?.uri?.let { fileUri ->
-                    context.contentResolver.openOutputStream(fileUri)?.use { outputStream ->
-                        outputStream.write(csv.toByteArray())
-                        outputStream.flush()
-                        return fileName
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                return null
-            }
-        }
-        return null
-    }
+    //             file?.uri?.let { fileUri ->
+    //                 context.contentResolver.openOutputStream(fileUri)?.use { outputStream ->
+    //                     outputStream.write(csv.toByteArray())
+    //                     outputStream.flush()
+    //                     return fileName
+    //                 }
+    //             }
+    //         } catch (e: Exception) {
+    //             e.printStackTrace()
+    //             return null
+    //         }
+    //     }
+    //     return null
+    // }
 }
 
 fun hasUriPermission(context: Context, uri: Uri): Boolean {

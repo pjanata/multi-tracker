@@ -19,4 +19,5 @@ data class Gps(
 interface GpsApi {
     fun startGpsRecording(): Boolean
     fun stopGpsRecording(): Boolean
+    suspend fun checkGpsReady(): Boolean
 }
