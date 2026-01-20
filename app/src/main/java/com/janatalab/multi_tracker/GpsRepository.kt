@@ -23,15 +23,17 @@ class GpsRepository(
     private val context: Context,
     private val gpsDataSource: GpsDataSource
 ) {
-    private var isInitialized = false
-    private var isRecording = false
+    // private var isInitialized = false
+    // private var isRecording = false
+    var isInitialized = false
+    var isRecording = false
 
     private val gpsData = mutableListOf<GpsApiModel>()
 
     private var csvFile: DocumentFile? = null
     private var csvWriter: BufferedWriter? = null
     private var writerJob: Job? = null
-    private var csvPath: String? = null
+    var csvPath: String? = null
 
     private var service: GpsLocalProvider? = null
 
@@ -164,8 +166,10 @@ class GpsRepository(
     fun currentNumSamples() = gpsData.size
 
     fun openCSVFile(): Pair<DocumentFile?, String> {
-        val prefs = context.getSharedPreferences("gps_prefs", Context.MODE_PRIVATE)
-        val uriString = prefs.getString("gps_folder_uri", null)
+        // val prefs = context.getSharedPreferences("gps_prefs", Context.MODE_PRIVATE)
+        // val uriString = prefs.getString("gps_folder_uri", null)
+        val prefs = context.getSharedPreferences("multi_tracker_prefs", Context.MODE_PRIVATE)
+        val uriString = prefs.getString("multi_tracker_folder_uri", null)
         val savedUri = uriString?.let { Uri.parse(it) }
         if (savedUri != null && hasUriPermission(context, savedUri)) {
             _userFolder = savedUri

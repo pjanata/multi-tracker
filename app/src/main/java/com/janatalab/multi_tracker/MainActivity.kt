@@ -68,7 +68,7 @@ class MainActivity : ComponentActivity() {
         val geoCodingProvider = GeoCodingProvider(geocoder)
 
         // neon's real-time api can be accessed via localhost when running on same phone
-        val neonProvider = NeonProvider("http://localhost:8080/api", enableLogging = false)
+        val neonProvider = NeonProvider("http://localhost:8080/api", enableLogging = true)
 
         val gpsLocalProvider = GpsLocalProvider()
         val gpsLocalDataSource = GpsDataSource(gpsLocalProvider)

@@ -37,6 +37,29 @@ class MultiViewModel(
         gpsRepository.setUserFolder(userFolder)
     }
 
+    fun initializeGpsRecording() {
+        Log.d("MT_CORE", "Initializing GPS recording output file")
+        
+        val initResult = gpsRepository.initializeGpsRecording()
+        val gpsInitialized = initResult.first
+        val gpsPath = initResult.second
+        
+        if (gpsInitialized) {
+            Log.d("MT_CORE", "GPS initialized successfully: $gpsPath")
+            _gpsUiState.update { it.copy(
+                isReady = true,
+                statusMessage = "Ready",
+                savedMessage = if (gpsPath != null) "Will save to:\nDocuments/GPS/$gpsPath" else ""
+            ) }
+        } else {
+            Log.d("MT_CORE", "GPS initialization failed")
+            _gpsUiState.update { it.copy(
+                isReady = false,
+                statusMessage = "Initialization failed"
+            ) }
+        }
+    }
+
     suspend fun checkDeviceStatus() {
         // Here we would check the status of all connected devices
         var isReadyOverall = true
@@ -70,20 +93,37 @@ class MultiViewModel(
         //
         // Deal with GPS status
         //
-        val gpsInitialized = gpsRepository.initializeGpsRecording()
-        val gpsReady = gpsInitialized.first
+        var gpsReady = gpsRepository.isInitialized
+
+        // Try to initialize GPS if not ready
+        if (!gpsReady) {
+            Log.d("MT_CORE", "GPS not initialized")
+
+            initializeGpsRecording()
+            gpsReady = gpsRepository.isInitialized
+
+            if (!gpsReady) {
+                _gpsUiState.update { it.copy(
+                statusMessage = "Not initialized",
+                isReady = false
+                ) }
+            }
+        }
 
         if (!gpsReady) {
             Log.d("MT_CORE", "GPS not ready")
+            _gpsUiState.update { it.copy(
+                statusMessage = "Not ready",
+                isReady = false
+            ) }
             isReadyOverall = false
         } else {
             Log.d("MT_CORE", "GPS ready")
+            _gpsUiState.update { it.copy(
+                statusMessage = "Ready",
+                isReady = true
+            ) }
         }
-
-        _gpsUiState.update { it.copy(
-            statusMessage = if (gpsReady) "Ready" else "Not ready",
-            isReady = gpsReady
-        ) }
 
         // statusMessage += "GPS: ${if (gpsReady) "Ready" else "Not Ready"}\n"
 
@@ -147,36 +187,49 @@ class MultiViewModel(
 
 
         // Deal with GPS component
-        if (false) {
-            val gpsRecordingState = gpsRepository.startStopGpsRecording()
-
-            val isGpsRecording = gpsRecordingState.first
-            val path = gpsRecordingState.second
-
+        val isCurrentlyRecordingGps = _gpsUiState.value.isRecording
+        
+        if (!isCurrentlyRecordingGps) {
+            // Starting recording
+            gpsRepository.startGpsRecording()
+            
+            // Send GPS begin event
             runBlocking {
                 withContext(Dispatchers.IO) {
-                    if (isGpsRecording) {
-                        sendGpsEvent("gps.begin")
-                    } else {
-                        sendGpsEvent("gps.end")
-                    }
+                    sendGpsEvent("gps.begin")
                 }
             }
-
-            val statusMessage = if (isGpsRecording) "GPS recording started..." else "GPS recording stopped!"
-            val buttonText = if (isGpsRecording) "Stop recording" else "Start recording"
+            
+            _gpsUiState.update {
+                it.copy(
+                    isRecording = true,
+                    statusMessage = "Recording...",
+                    buttonText = "Stop recording"
+                )
+            }
+        } else {
+            // Stopping recording
+            gpsRepository.stopGpsRecording()
+            
+            // Send GPS end event
+            runBlocking {
+                withContext(Dispatchers.IO) {
+                    sendGpsEvent("gps.end")
+                }
+            }
+            
+            val path = gpsRepository.csvPath
             val savedMessage = if (path != null) {
                 "Saved to:\nDocuments/GPS/$path"
             } else {
                 ""
             }
-
-            // Update our GPS UI state
+            
             _gpsUiState.update {
                 it.copy(
-                    isRecording = isGpsRecording,
-                    statusMessage = statusMessage,
-                    buttonText = buttonText,
+                    isRecording = false,
+                    statusMessage = "Recording stopped",
+                    buttonText = "Start recording",
                     savedMessage = savedMessage
                 )
             }
