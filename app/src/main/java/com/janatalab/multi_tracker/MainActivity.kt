@@ -85,9 +85,9 @@ class MainActivity : ComponentActivity() {
 
         // TODO: modify this so that listenGPsNumSamples is defined in the gpsRepository
         // rather than the ViewModel
-        multiViewModel.listenGpsNumSamples()
+        // multiViewModel.listenGpsNumSamples()
 
-        Log.d("MT_CORE", "Initialized all Providers and ViewModel")
+        Log.d("MT_CORE", "Assembled all Providers and ViewModel")
 
         setContent {
             BlackWhiteTheme() {
@@ -132,9 +132,9 @@ fun SetupAndStartMainScreen(multiViewModel: MultiViewModel) {
     val context = LocalContext.current
     val sharedPrefs = context.getSharedPreferences("multi_tracker_prefs", Context.MODE_PRIVATE)
     val savedUriString = sharedPrefs.getString("multi_tracker_folder_uri", null)
-    Log.d("MT_CORE", "Saved data dir: ${savedUriString}")
+    Log.d("MT_CORE", "GPS data dir: ${savedUriString}")
 
-    Log.d("MT_CORE", "Requesting permissions")
+    Log.d("MT_CORE", "Checking permissions")
 
     var notificationGranted by remember {
         mutableStateOf(areNotificationsEnabled(context))

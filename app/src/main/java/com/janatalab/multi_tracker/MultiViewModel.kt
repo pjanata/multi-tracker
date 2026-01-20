@@ -38,18 +38,15 @@ class MultiViewModel(
     }
 
     fun initializeGpsRecording() {
-        Log.d("MT_CORE", "Initializing GPS recording output file")
-        
         val initResult = gpsRepository.initializeGpsRecording()
         val gpsInitialized = initResult.first
-        val gpsPath = initResult.second
         
         if (gpsInitialized) {
-            Log.d("MT_CORE", "GPS initialized successfully: $gpsPath")
+            Log.d("MT_CORE", "GPS initialized successfully")
             _gpsUiState.update { it.copy(
-                isReady = true,
-                statusMessage = "Ready",
-                savedMessage = if (gpsPath != null) "Will save to:\nDocuments/GPS/$gpsPath" else ""
+                isInitialized = true,
+                statusMessage = "Initialized",
+                savedMessage = "File will be created when recording starts"
             ) }
         } else {
             Log.d("MT_CORE", "GPS initialization failed")
@@ -60,10 +57,10 @@ class MultiViewModel(
         }
     }
 
-    suspend fun checkDeviceStatus() {
+    suspend fun checkDeviceStatus(maxRetries: Int = 10, retryInterval: Long = 1000) {
         // Here we would check the status of all connected devices
-        var isReadyOverall = true
-        
+        var isReadyOverall = false
+        Log.d("MT_CORE", "Checking device statuses")
         //
         // Deal with Neon status
         //
@@ -73,11 +70,11 @@ class MultiViewModel(
         if (neon_status_message.startsWith("Error: Failed to connect")) {
             Log.d("MT_CORE", "Neon not ready: ${neon_status_message}")
             neon_status_message = "Start the Neon App"
-            isReadyOverall = false
+
         } else if (neon_status_message.startsWith("Error:")) {
             Log.d("MT_CORE", "Neon not ready: ${neon_status_message}")
             neon_status_message = "Error: ${neon_status_message}"
-            isReadyOverall = false
+
         } else {
             neon_status_message = "Ready"
             Log.d("MT_CORE", "Neon ready: ${neon_status_message}")
@@ -93,41 +90,82 @@ class MultiViewModel(
         //
         // Deal with GPS status
         //
-        var gpsReady = gpsRepository.isInitialized
+        var gpsReady = false
+        var gpsInitialized = gpsRepository.isInitialized
 
         // Try to initialize GPS if not ready
-        if (!gpsReady) {
-            Log.d("MT_CORE", "GPS not initialized")
+        if (!gpsInitialized) {
+            Log.d("MT_CORE", "GPS not initialized, initializing now")
 
             initializeGpsRecording()
-            gpsReady = gpsRepository.isInitialized
+            gpsInitialized = gpsRepository.isInitialized
 
-            if (!gpsReady) {
+            if (!gpsInitialized) {
                 _gpsUiState.update { it.copy(
-                statusMessage = "Not initialized",
+                statusMessage = "Initialization failed",
                 isReady = false
                 ) }
+            } else {
+                // Give service binding a moment to complete
+                kotlinx.coroutines.delay(100)
+            }
+        }
+
+        // Even if initialized, check if GPS can actually get location (with retries)
+        if (gpsInitialized) {
+            Log.d("MT_CORE", "GPS initialized, checking if location available")
+            
+            var retryCount = 0
+            while (retryCount <= maxRetries) {
+                gpsReady = gpsRepository.checkGpsReady()
+                
+                if (gpsReady) {
+                    Log.d("MT_CORE", "GPS location acquired after $retryCount retries")
+                    break
+                }
+                
+                if (retryCount < maxRetries) {
+                    val retriesRemaining = maxRetries - retryCount
+                    val retryIntervalSeconds = retryInterval / 1000
+                    Log.d("MT_CORE", "GPS location not available, retry $retryCount/$maxRetries")
+                    _gpsUiState.update { it.copy(
+                        statusMessage = "No GPS location, retrying in ${retryIntervalSeconds}s ($retriesRemaining left)",
+                        isReady = false
+                    ) }
+                    kotlinx.coroutines.delay(retryInterval)
+                    retryCount++
+                } else {
+                    Log.d("MT_CORE", "GPS location not available after $maxRetries retries")
+                    _gpsUiState.update { it.copy(
+                        statusMessage = "No location after ${maxRetries} retries - move outdoors",
+                        isReady = false
+                    ) }
+                    break
+                }
+            }
+            
+            if (!gpsReady) {
+                // Note: We don't clean up here since recording hasn't started yet
+                // File creation is deferred until startGpsRecording() is called
             }
         }
 
         if (!gpsReady) {
             Log.d("MT_CORE", "GPS not ready")
             _gpsUiState.update { it.copy(
-                statusMessage = "Not ready",
+                statusMessage = if (!gpsRepository.isInitialized) "Not initialized" else "No location available",
                 isReady = false
             ) }
             isReadyOverall = false
         } else {
-            Log.d("MT_CORE", "GPS ready")
+            Log.d("MT_CORE", "GPS ready with location")
             _gpsUiState.update { it.copy(
                 statusMessage = "Ready",
                 isReady = true
             ) }
         }
 
-        // statusMessage += "GPS: ${if (gpsReady) "Ready" else "Not Ready"}\n"
-
-        // val statusMessage += "Movella: ${if (_movellaUiState.isReady) "Ready" else "Not Ready"}
+        isReadyOverall = neonReady && gpsReady
 
         val statusMessage= if (isReadyOverall) {
             "All components ready"
@@ -144,53 +182,54 @@ class MultiViewModel(
 
     fun startStopMultiRecording() {
         Log.d("MT_CORE", "Toggling multi recording state")  
-
-        // Handle our not recording state
-        if (!_multiUiState.value.isReady) {
-            Log.d("MT_CORE", "Checking device status before starting recording")
-            viewModelScope.launch {
-                checkDeviceStatus()
-            }
-            if (!_multiUiState.value.isReady) {
-                Log.d("MT_CORE", "Not all components are ready, cannot start recording")
-                return
-            }
-        }
-
-        // Toggle recording state for Neon
-        val isNeonRecording = _neonUiState.value.isRecording
-        val neonStatus = runBlocking {
-            withContext(Dispatchers.IO) {
-                neonProvider.startStopNeonRecording(isNeonRecording)
-            }
-        }
-
-        if (neonStatus.startsWith("Error")) {
-            Log.d("MT_CORE", "Error toggling Neon recording: ${neonStatus}")
-            _neonUiState.update {
-                it.copy(
-                    statusMessage = neonStatus,
-                    isRecording = false,
-                    isReady = false
-                )
-            }
-        } else {
-            Log.d("MT_CORE", "Neon recording toggled successfully: ${neonStatus}")
-
-            _neonUiState.update {
-                it.copy(
-                    isRecording = !isNeonRecording,
-                    statusMessage = neonStatus,
-                )
-            }
-        }
-
-
-        // Deal with GPS component
-        val isCurrentlyRecordingGps = _gpsUiState.value.isRecording
         
-        if (!isCurrentlyRecordingGps) {
-            // Starting recording
+        val isCurrentlyRecording = _multiUiState.value.isRecording
+
+        if (!isCurrentlyRecording) {
+            // STARTING RECORDING
+            
+            // Check if devices are ready
+            if (!_multiUiState.value.isReady) {
+                Log.d("MT_CORE", "Checking device status before starting recording")
+                viewModelScope.launch {
+                    checkDeviceStatus()
+                }
+                if (!_multiUiState.value.isReady) {
+                    Log.d("MT_CORE", "Not all components are ready, cannot start recording")
+                    return
+                }
+            }
+            
+            // Step 1: Start Neon first
+            Log.d("MT_CORE", "Starting Neon recording")
+            val neonStatus = runBlocking {
+                withContext(Dispatchers.IO) {
+                    neonProvider.startStopNeonRecording(false)
+                }
+            }
+
+            if (neonStatus.startsWith("Error")) {
+                Log.e("MT_CORE", "Error starting Neon recording: ${neonStatus}")
+                _neonUiState.update {
+                    it.copy(
+                        statusMessage = neonStatus,
+                        isRecording = false,
+                        isReady = false
+                    )
+                }
+                return
+            } else {
+                Log.d("MT_CORE", "Neon recording started successfully")
+                _neonUiState.update {
+                    it.copy(
+                        isRecording = true,
+                        statusMessage = "Recording...",
+                    )
+                }
+            }
+
+            // Step 2: Start GPS second
+            Log.d("MT_CORE", "Starting GPS recording")
             gpsRepository.startGpsRecording()
             
             // Send GPS begin event
@@ -207,8 +246,18 @@ class MultiViewModel(
                     buttonText = "Stop recording"
                 )
             }
+            
+            _multiUiState.update {
+                it.copy(
+                    isRecording = true
+                )
+            }
+            
         } else {
-            // Stopping recording
+            // STOPPING RECORDING
+            
+            // Step 1: Stop GPS first
+            Log.d("MT_CORE", "Stopping GPS recording")
             gpsRepository.stopGpsRecording()
             
             // Send GPS end event
@@ -228,32 +277,63 @@ class MultiViewModel(
             _gpsUiState.update {
                 it.copy(
                     isRecording = false,
-                    statusMessage = "Recording stopped",
+                    isReady = false,
+                    statusMessage = "Not ready",
                     buttonText = "Start recording",
                     savedMessage = savedMessage
                 )
             }
-        }
-
-        _multiUiState.update {
-            it.copy(
-                isRecording = !it.isRecording
-            )
-        }
-    }
-
-    fun listenGpsNumSamples() {
-        Log.d("MT_GPS", "Listening for GPS data updates in separate coroutine")
-
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                while (true) {
-                    val currentNumSamples = gpsRepository.currentNumSamples()
-                    _gpsUiState.update { it.copy(numSamples = currentNumSamples) }
+            
+            // Step 2: Stop Neon second
+            Log.d("MT_CORE", "Stopping Neon recording")
+            val neonStatus = runBlocking {
+                withContext(Dispatchers.IO) {
+                    neonProvider.startStopNeonRecording(true)
                 }
+            }
+
+            if (neonStatus.startsWith("Error")) {
+                Log.e("MT_CORE", "Error stopping Neon recording: ${neonStatus}")
+                _neonUiState.update {
+                    it.copy(
+                        statusMessage = neonStatus,
+                        isRecording = false,
+                        isReady = false
+                    )
+                }
+            } else {
+                Log.d("MT_CORE", "Neon recording stopped successfully")
+                _neonUiState.update {
+                    it.copy(
+                        isRecording = false,
+                        isReady = false,
+                        statusMessage = "Not ready",
+                    )
+                }
+            }
+
+            _multiUiState.update {
+                it.copy(
+                    isRecording = false,
+                    isReady = false,
+                    statusMessage = "Not ready"
+                )
             }
         }
     }
+
+    // fun listenGpsNumSamples() {
+    //     Log.d("MT_GPS", "Listening for GPS data updates in separate coroutine")
+
+    //     viewModelScope.launch {
+    //         withContext(Dispatchers.IO) {
+    //             while (true) {
+    //                 val currentNumSamples = gpsRepository.currentNumSamples()
+    //                 _gpsUiState.update { it.copy(numSamples = currentNumSamples) }
+    //             }
+    //         }
+    //     }
+    // }
 
     suspend fun sendGpsEvent(custom_name: String?) {
         var event = Event()
